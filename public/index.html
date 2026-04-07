@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" href="favicon.png" type="image/png">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Astroyd.io — Asteroid Multiplayer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+    :root{
+      --space:#030812; --accent:#00ffe0; --accent2:#ff4d6d; --gold:#ffd700;
+      --ui-bg:rgba(3,8,18,.9); --ui-border:rgba(0,255,224,.22);
+      --font-hud:'Orbitron',monospace; --font-mono:'Share Tech Mono',monospace;
+    }
+    html,body{width:100%;height:100%;background:var(--space);overflow:hidden;font-family:var(--font-hud);color:#fff}
+    #gameCanvas{display:block;position:absolute;top:0;left:0;cursor:none}
+
+    /* ── Screens ── */
+    .screen{
+      position:absolute;inset:0;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      background:radial-gradient(ellipse at center,rgba(0,30,60,.93) 0%,rgba(3,8,18,.97) 100%);
+      z-index:10;transition:opacity .35s;
+    }
+    .screen.hidden{opacity:0;pointer-events:none}
+
+    /* ── Title ── */
+    #titleScreen h1{
+      font-size:clamp(2.4rem,8vw,5rem);font-weight:900;letter-spacing:.12em;
+      background:linear-gradient(135deg,var(--accent) 0%,#7af7ff 50%,var(--accent) 100%);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+      margin-bottom:.2em;animation:pulse 3s ease-in-out infinite;
+    }
+    @keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.3) drop-shadow(0 0 20px var(--accent))}}
+    #titleScreen p.tagline{
+      font-family:var(--font-mono);color:rgba(0,255,224,.6);
+      font-size:.9rem;letter-spacing:.3em;text-transform:uppercase;margin-bottom:2rem;
+    }
+    .name-row{display:flex;gap:.6rem;margin-bottom:1.4rem}
+    #nameInput{
+      font-family:var(--font-mono);font-size:1rem;padding:.7rem 1.2rem;
+      background:rgba(0,255,224,.07);border:1px solid var(--ui-border);border-radius:6px;
+      color:var(--accent);outline:none;width:230px;transition:border-color .2s,box-shadow .2s;
+    }
+    #nameInput::placeholder{color:rgba(0,255,224,.3)}
+    #nameInput:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,255,224,.12)}
+
+    /* Buttons */
+    .btn{
+      font-family:var(--font-hud);font-size:.85rem;font-weight:700;letter-spacing:.15em;
+      text-transform:uppercase;padding:.7rem 1.6rem;border:1px solid var(--accent);
+      background:rgba(0,255,224,.1);color:var(--accent);border-radius:6px;cursor:pointer;
+      transition:background .2s,box-shadow .2s,transform .1s;white-space:nowrap;
+    }
+    .btn:hover{background:rgba(0,255,224,.2);box-shadow:0 0 18px rgba(0,255,224,.3)}
+    .btn:active{transform:scale(.97)}
+    .btn.secondary{border-color:rgba(0,255,224,.35);color:rgba(0,255,224,.6);background:transparent}
+    .btn.secondary:hover{background:rgba(0,255,224,.07);box-shadow:none}
+
+    .title-btns{display:flex;gap:.7rem;margin-bottom:1.8rem}
+
+    .controls-info{
+      font-family:var(--font-mono);font-size:.72rem;
+      color:rgba(255,255,255,.3);letter-spacing:.07em;line-height:2;text-align:center;
+    }
+    .controls-info span{color:rgba(0,255,224,.55)}
+
+    /* ── SHOP ── */
+    #shopScreen{z-index:11}
+    #shopScreen h2{
+      font-size:1.8rem;font-weight:900;letter-spacing:.15em;
+      color:var(--accent);margin-bottom:.3rem;
+    }
+    #shopScreen p.shop-sub{
+      font-family:var(--font-mono);font-size:.75rem;color:rgba(0,255,224,.45);
+      letter-spacing:.15em;margin-bottom:2rem;text-transform:uppercase;
+    }
+    .skin-grid{
+      display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+      max-width:680px;width:90%;margin-bottom:2rem;
+    }
+    .skin-card{
+      background:rgba(0,255,224,.04);border:1px solid rgba(0,255,224,.14);
+      border-radius:10px;padding:14px 10px 10px;
+      display:flex;flex-direction:column;align-items:center;gap:8px;
+      cursor:pointer;transition:border-color .2s,background .2s,transform .15s;
+      position:relative;
+    }
+    .skin-card:hover{border-color:rgba(0,255,224,.4);background:rgba(0,255,224,.08);transform:translateY(-2px)}
+    .skin-card.owned{border-color:rgba(0,255,224,.5)}
+    .skin-card.equipped{border-color:var(--accent);background:rgba(0,255,224,.12)}
+    .skin-card.equipped::after{
+      content:'EQUIPPED';font-family:var(--font-mono);font-size:.55rem;
+      color:var(--accent);letter-spacing:.12em;position:absolute;bottom:8px;
+    }
+    .skin-preview{width:64px;height:64px}/* canvas inside */
+    .skin-name{font-size:.65rem;letter-spacing:.1em;color:rgba(255,255,255,.8);text-transform:uppercase;text-align:center}
+    .skin-status{
+      font-family:var(--font-mono);font-size:.6rem;letter-spacing:.08em;text-align:center;
+      padding:3px 8px;border-radius:4px;
+    }
+    .skin-status.locked{color:rgba(255,255,255,.35);background:rgba(255,255,255,.05)}
+    .skin-status.owned-badge{color:var(--accent);background:rgba(0,255,224,.1)}
+    .skin-status.equipped-badge{color:var(--accent);display:none}
+
+    /* Ad modal */
+    #adModal{
+      position:absolute;inset:0;background:rgba(3,8,18,.96);z-index:20;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    }
+    #adModal.hidden{display:none}
+    #adModal h3{font-size:1.1rem;color:var(--accent);letter-spacing:.12em}
+    #adBox{
+      width:320px;height:180px;background:#0a1628;border:1px solid rgba(0,255,224,.2);
+      border-radius:8px;display:flex;align-items:center;justify-content:center;
+      font-family:var(--font-mono);font-size:.8rem;color:rgba(255,255,255,.3);
+      letter-spacing:.1em;position:relative;overflow:hidden;
+    }
+    #adBox canvas{position:absolute;inset:0}
+    #adTimerBar{
+      position:absolute;bottom:0;left:0;height:3px;
+      background:var(--accent);transition:width .1s linear;
+    }
+    #adSkipBtn{display:none}
+    #adModal p.ad-info{font-family:var(--font-mono);font-size:.7rem;color:rgba(0,255,224,.4);letter-spacing:.1em}
+
+    /* ── HUD ── */
+    #hud{
+      position:absolute;top:0;left:0;right:0;pointer-events:none;
+      z-index:5;padding:12px 16px;
+      display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    }
+    .hud-box{
+      background:var(--ui-bg);border:1px solid var(--ui-border);
+      border-radius:8px;padding:8px 14px;backdrop-filter:blur(8px);
+    }
+    #statsPanel{min-width:108px}
+    .stat-label{font-size:.58rem;color:rgba(0,255,224,.5);letter-spacing:.22em;text-transform:uppercase}
+    .stat-value{font-size:1.45rem;color:var(--accent);font-weight:700;line-height:1.1}
+    .stat-value.gold{color:var(--gold);font-size:1.05rem}
+    .stat-divider{border:none;border-top:1px solid rgba(0,255,224,.1);margin:5px 0}
+    .new-record{
+      font-family:var(--font-mono);font-size:.6rem;color:var(--gold);
+      letter-spacing:.12em;text-transform:uppercase;animation:recordPop .4s ease;
+    }
+    @keyframes recordPop{0%{transform:scale(1.4);opacity:0}100%{transform:scale(1);opacity:1}}
+
+    #leaderboard{min-width:168px}
+    #leaderboard h3{font-size:.57rem;letter-spacing:.25em;color:rgba(0,255,224,.5);text-transform:uppercase;margin-bottom:6px}
+    #lbList{list-style:none}
+    #lbList li{
+      font-family:var(--font-mono);font-size:.77rem;padding:2px 0;
+      display:flex;justify-content:space-between;gap:8px;
+      color:rgba(255,255,255,.62);border-bottom:1px solid rgba(255,255,255,.04);
+    }
+    #lbList li:last-child{border-bottom:none}
+    #lbList li.me{color:var(--accent)}
+    #lbList li .lb-rank{color:rgba(255,255,255,.25);min-width:14px}
+    #lbList li .lb-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #lbList li .lb-mass{color:var(--accent);min-width:28px;text-align:right}
+
+    /* Kill feed */
+    #killfeed{
+      position:absolute;right:16px;top:50%;transform:translateY(-50%);
+      pointer-events:none;z-index:5;
+      display:flex;flex-direction:column;gap:4px;align-items:flex-end;
+    }
+    .kf-entry{
+      font-family:var(--font-mono);font-size:.7rem;
+      background:rgba(3,8,18,.84);border:1px solid rgba(255,77,109,.28);
+      border-radius:4px;padding:3px 9px;color:rgba(255,255,255,.52);
+      animation:kfIn .2s ease,kfOut .5s ease 2.5s forwards;white-space:nowrap;
+    }
+    .kf-entry .kf-winner{color:var(--accent)}
+    .kf-entry .kf-loser{color:var(--accent2)}
+    @keyframes kfIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+    @keyframes kfOut{to{opacity:0;transform:translateX(18px)}}
+
+    /* Minimap */
+    #minimap{
+      position:absolute;bottom:16px;right:16px;
+      width:140px;height:140px;
+      background:rgba(3,8,18,.78);border:1px solid var(--ui-border);
+      border-radius:8px;overflow:hidden;z-index:5;
+    }
+    #minimapCanvas{width:100%;height:100%}
+
+    #bottomLeft{
+      position:absolute;bottom:16px;left:16px;
+      font-family:var(--font-mono);font-size:.67rem;
+      color:rgba(0,255,224,.36);z-index:5;line-height:1.7;
+    }
+
+    /* Death screen */
+    #deathScreen h2{font-size:2.5rem;color:var(--accent2);letter-spacing:.15em;margin-bottom:.5rem;animation:flicker .3s ease}
+    @keyframes flicker{0%{opacity:.2}30%{opacity:1}60%{opacity:.5}100%{opacity:1}}
+    #deathScreen p{font-family:var(--font-mono);color:rgba(255,255,255,.42);margin-bottom:.8rem;line-height:1.8}
+    #deathScreen p span{color:var(--gold)}
+    .death-btns{display:flex;gap:.8rem;margin-top:1.4rem}
+
+    /* Flash */
+    #flashOverlay{
+      position:absolute;inset:0;pointer-events:none;z-index:4;
+      background:radial-gradient(circle at 50% 50%,rgba(0,255,224,.09) 0%,transparent 70%);
+      opacity:0;transition:opacity .05s;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+<div id="flashOverlay"></div>
+
+<!-- HUD (in-game) -->
+<div id="hud" class="hidden">
+  <div class="hud-box" id="statsPanel">
+    <div class="stat-label">MASS</div>
+    <div class="stat-value" id="massVal">18</div>
+    <hr class="stat-divider"/>
+    <div class="stat-label">BEST</div>
+    <div class="stat-value gold" id="topScoreVal">—</div>
+    <div id="newRecordBadge" style="display:none" class="new-record">★ NEW BEST!</div>
+  </div>
+  <div class="hud-box" id="leaderboard">
+    <h3>⬡ Leaderboard — by Mass</h3>
+    <ul id="lbList"></ul>
+  </div>
+</div>
+
+<div id="killfeed"></div>
+<div id="minimap"><canvas id="minimapCanvas" width="140" height="140"></canvas></div>
+<div id="bottomLeft">
+  <div id="pingDisplay">PING — ms</div>
+  <div id="playerCountDisplay">PLAYERS —</div>
+</div>
+
+<!-- ════ Title Screen ════ -->
+<div class="screen" id="titleScreen">
+  <h1>ASTROYD.IO</h1>
+  <p class="tagline">★ Grow · Consume · Dominate ★</p>
+  <div class="name-row">
+    <input id="nameInput" type="text" maxlength="20" placeholder="Enter your name…" autocomplete="off"/>
+  </div>
+  <div class="title-btns">
+    <button class="btn" id="playBtn">LAUNCH</button>
+    <button class="btn secondary" id="shopBtn">🪐 SKINS</button>
+  </div>
+  <div class="controls-info">
+    <span>MOUSE</span> to steer &nbsp;|&nbsp; <span>W / ↑</span> to boost<br/>
+    Collect <span>★ stars</span> to grow · Absorb <span>smaller</span> asteroids
+  </div>
+</div>
+
+<!-- ════ Shop Screen ════ -->
+<div class="screen hidden" id="shopScreen">
+  <h2>ASTEROID SKINS</h2>
+  <p class="shop-sub">Watch a short ad to unlock any skin</p>
+  <div class="skin-grid" id="skinGrid"><!-- filled by JS --></div>
+  <button class="btn secondary" id="shopBackBtn">← BACK</button>
+
+  <!-- Simulated ad modal -->
+  <div id="adModal" class="hidden">
+    <h3>WATCHING AD…</h3>
+    <div id="adBox">
+      <canvas id="adCanvas" width="320" height="180"></canvas>
+      <div id="adTimerBar" style="width:0%"></div>
+    </div>
+    <p class="ad-info" id="adCountdown">Ad completes in <span id="adSec">5</span>s</p>
+    <button class="btn" id="adSkipBtn" style="display:none">CLAIM SKIN</button>
+    <button class="btn secondary" id="adCancelBtn">CANCEL</button>
+  </div>
+</div>
+
+<!-- ════ Death Screen ════ -->
+<div class="screen hidden" id="deathScreen">
+  <h2>DESTROYED</h2>
+  <p id="deathMsg">You were consumed.</p>
+  <div class="death-btns">
+    <button class="btn" id="respawnBtn">RESPAWN</button>
+    <button class="btn secondary" id="deathShopBtn">🪐 SKINS</button>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Astroyd.io — Client
+   Changes in this version:
+     • Cosmetic shop with 12 skins, unlocked by "watching an ad" (simulated)
+     • Skins stored in localStorage (persist between sessions)
+     • On death: player is REMOVED from local state immediately (no ghost)
+     • Leaderboard duplicate fix: build from players map (server is source of truth)
+     • Respawn reconnects WebSocket freshly — no ghost player lingers
+     • Death screen has "SKINS" shortcut button
+   ══════════════════════════════════════════════════════════════════════════ */
+
+// ── DOM refs ────────────────────────────────────────────────────────────────
+const canvas   = document.getElementById('gameCanvas');
+const ctx      = canvas.getContext('2d');
+const mmCanvas = document.getElementById('minimapCanvas');
+const mmCtx    = mmCanvas.getContext('2d');
+const flashEl  = document.getElementById('flashOverlay');
+
+const titleScreen = document.getElementById('titleScreen');
+const shopScreen  = document.getElementById('shopScreen');
+const deathScreen = document.getElementById('deathScreen');
+const hudEl       = document.getElementById('hud');
+
+const massVal       = document.getElementById('massVal');
+const topScoreVal   = document.getElementById('topScoreVal');
+const newRecordBadge= document.getElementById('newRecordBadge');
+const lbList        = document.getElementById('lbList');
+const killfeed      = document.getElementById('killfeed');
+const pingDisplay   = document.getElementById('pingDisplay');
+const playerCountEl = document.getElementById('playerCountDisplay');
+const nameInput     = document.getElementById('nameInput');
+
+const playBtn     = document.getElementById('playBtn');
+const shopBtn     = document.getElementById('shopBtn');
+const shopBackBtn = document.getElementById('shopBackBtn');
+const deathShopBtn= document.getElementById('deathShopBtn');
+const respawnBtn  = document.getElementById('respawnBtn');
+const deathMsg    = document.getElementById('deathMsg');
+const skinGrid    = document.getElementById('skinGrid');
+
+const adModal    = document.getElementById('adModal');
+const adCanvas   = document.getElementById('adCanvas');
+const adCtx      = adCanvas.getContext('2d');
+const adTimerBar = document.getElementById('adTimerBar');
+const adSec      = document.getElementById('adSec');
+const adSkipBtn  = document.getElementById('adSkipBtn');
+const adCancelBtn= document.getElementById('adCancelBtn');
+
+// ── Skin definitions ─────────────────────────────────────────────────────────
+// Each skin describes how drawPlayer renders the asteroid.
+// type: 'solid' | 'lava' | 'ice' | 'neon' | 'gold' | 'nebula' | 'void' | 'toxic'
+const SKINS = [
+  { id:'default',  name:'Default',   free:true,  type:'solid',  hue:null,  desc:'Classic rock' },
+  { id:'crimson',  name:'Crimson',   free:false, type:'solid',  hue:0,     desc:'Red hot' },
+  { id:'sapphire', name:'Sapphire',  free:false, type:'solid',  hue:210,   desc:'Deep blue' },
+  { id:'emerald',  name:'Emerald',   free:false, type:'solid',  hue:140,   desc:'Forest green' },
+  { id:'amethyst', name:'Amethyst',  free:false, type:'solid',  hue:270,   desc:'Royal purple' },
+  { id:'lava',     name:'Lava',      free:false, type:'lava',   hue:15,    desc:'Molten core' },
+  { id:'ice',      name:'Ice',       free:false, type:'ice',    hue:195,   desc:'Frozen tundra' },
+  { id:'neon',     name:'Neon',      free:false, type:'neon',   hue:300,   desc:'Glowing plasma' },
+  { id:'gold',     name:'Gold',      free:false, type:'gold',   hue:45,    desc:'Gilded asteroid' },
+  { id:'nebula',   name:'Nebula',    free:false, type:'nebula', hue:260,   desc:'Cosmic dust' },
+  { id:'void',     name:'Void',      free:false, type:'void',   hue:240,   desc:'Dark matter' },
+  { id:'toxic',    name:'Toxic',     free:false, type:'toxic',  hue:80,    desc:'Acid rain' },
+];
+
+// ── Skin persistence ─────────────────────────────────────────────────────────
+function loadOwnedSkins() {
+  try { return JSON.parse(localStorage.getItem('astroyd_skins') || '["default"]'); }
+  catch(_) { return ['default']; }
+}
+function saveOwnedSkins(arr) {
+  try { localStorage.setItem('astroyd_skins', JSON.stringify(arr)); } catch(_) {}
+}
+function loadEquippedSkin() {
+  return localStorage.getItem('astroyd_equipped') || 'default';
+}
+function saveEquippedSkin(id) {
+  try { localStorage.setItem('astroyd_equipped', id); } catch(_) {}
+}
+
+let ownedSkins   = loadOwnedSkins();
+let equippedSkin = loadEquippedSkin();
+// Ensure equipped skin is actually owned (safety check)
+if (!ownedSkins.includes(equippedSkin)) equippedSkin = 'default';
+
+function getSkinDef(id) { return SKINS.find(s=>s.id===id) || SKINS[0]; }
+function getActiveSkin() { return getSkinDef(equippedSkin); }
+
+// ── Shop UI ───────────────────────────────────────────────────────────────────
+function buildShop() {
+  skinGrid.innerHTML = '';
+  SKINS.forEach(skin => {
+    const owned    = skin.free || ownedSkins.includes(skin.id);
+    const equipped = equippedSkin === skin.id;
+
+    const card = document.createElement('div');
+    card.className = 'skin-card' + (owned ? ' owned':'') + (equipped ? ' equipped':'');
+    card.dataset.id = skin.id;
+
+    // Mini canvas preview
+    const previewCanvas = document.createElement('canvas');
+    previewCanvas.className = 'skin-preview';
+    previewCanvas.width = 64; previewCanvas.height = 64;
+    card.appendChild(previewCanvas);
+    drawSkinPreview(previewCanvas, skin);
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'skin-name';
+    nameEl.textContent = skin.name;
+    card.appendChild(nameEl);
+
+    const statusEl = document.createElement('div');
+    statusEl.className = 'skin-status ' + (equipped ? 'equipped-badge' : owned ? 'owned-badge' : 'locked');
+    statusEl.textContent = equipped ? 'Equipped' : owned ? 'Owned' : '▶ Watch Ad';
+    card.appendChild(statusEl);
+
+    card.addEventListener('click', () => handleSkinClick(skin));
+    skinGrid.appendChild(card);
+  });
+}
+
+function handleSkinClick(skin) {
+  const owned = skin.free || ownedSkins.includes(skin.id);
+  if (owned) {
+    // Equip immediately
+    equippedSkin = skin.id;
+    saveEquippedSkin(skin.id);
+    buildShop();
+  } else {
+    // Show simulated ad
+    startAdFlow(skin);
+  }
+}
+
+// ── Ad simulation ─────────────────────────────────────────────────────────────
+let adTarget = null;
+let adTimer  = null;
+let adAnimFrame = null;
+
+function startAdFlow(skin) {
+  adTarget = skin;
+  adModal.classList.remove('hidden');
+  adSkipBtn.style.display = 'none';
+  const DURATION = 5000; // 5 second "ad"
+  const start = Date.now();
+
+  // Animate the "ad" — a fun little particle demo
+  let adParticles = Array.from({length:30}, () => ({
+    x: Math.random()*320, y: Math.random()*180,
+    vx:(Math.random()-.5)*60, vy:(Math.random()-.5)*60,
+    r:Math.random()*4+2, hue:Math.floor(Math.random()*360), life:1,
+  }));
+
+  function animateAd(now) {
+    const elapsed = Date.now() - start;
+    const progress = Math.min(1, elapsed / DURATION);
+
+    // Update ad particles
+    const dt = 0.033;
+    adParticles.forEach(p => {
+      p.x += p.vx*dt; p.y += p.vy*dt;
+      if(p.x<0)p.x=320; if(p.x>320)p.x=0;
+      if(p.y<0)p.y=180; if(p.y>180)p.y=0;
+    });
+
+    // Draw fake ad
+    adCtx.fillStyle='#050f20';
+    adCtx.fillRect(0,0,320,180);
+    // Animated circles as fake ad content
+    adParticles.forEach(p=>{
+      adCtx.beginPath(); adCtx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      adCtx.fillStyle=`hsla(${p.hue},80%,60%,.5)`; adCtx.fill();
+    });
+    adCtx.font='bold 14px Orbitron,monospace';
+    adCtx.textAlign='center'; adCtx.fillStyle='rgba(255,255,255,.15)';
+    adCtx.fillText('[ SIMULATED AD ]',160,95);
+
+    // Progress bar
+    adTimerBar.style.width = (progress*100)+'%';
+    const remaining = Math.max(0, Math.ceil((DURATION - elapsed)/1000));
+    adSec.textContent = remaining;
+
+    if (progress >= 1) {
+      adSkipBtn.style.display = 'block';
+      document.getElementById('adCountdown').style.display='none';
+    } else {
+      adAnimFrame = requestAnimationFrame(animateAd);
+    }
+  }
+  adAnimFrame = requestAnimationFrame(animateAd);
+}
+
+adSkipBtn.addEventListener('click', () => {
+  // Unlock the skin
+  if (adTarget && !ownedSkins.includes(adTarget.id)) {
+    ownedSkins.push(adTarget.id);
+    saveOwnedSkins(ownedSkins);
+  }
+  equippedSkin = adTarget.id;
+  saveEquippedSkin(adTarget.id);
+  closeAdModal();
+  buildShop();
+});
+
+adCancelBtn.addEventListener('click', closeAdModal);
+
+function closeAdModal() {
+  if (adAnimFrame) cancelAnimationFrame(adAnimFrame);
+  adModal.classList.add('hidden');
+  adSkipBtn.style.display='none';
+  document.getElementById('adCountdown').style.display='';
+  adTarget = null;
+}
+
+// ── Skin preview renderer ─────────────────────────────────────────────────────
+function drawSkinPreview(cvs, skin) {
+  const c = cvs.getContext('2d');
+  const cx=32,cy=32,pr=24; // pr already in pixels for preview
+  c.clearRect(0,0,64,64);
+  drawAsteroidShape(c, cx, cy, pr, 'preview', skin, 0, false, 1, 180);
+}
+
+// ── Mass → pixel radius conversion (must match server formula exactly) ────────
+// Server sends r as raw MASS (can be up to 10000).
+// This converts it to a pixel radius for rendering and UI.
+// Using log scale so growth feels meaningful but asteroids don't eat the screen.
+let RADIUS_BASE = 10, RADIUS_LOG_BASE = 5; // defaults, overwritten by server init
+function massToPixelRadius(mass) {
+  return Math.max(8, RADIUS_BASE * Math.log(Math.max(1, mass) / RADIUS_LOG_BASE + 1));
+}
+
+// ── Game state ─────────────────────────────────────────────────────────────
+let ws = null;
+let selfId = null;
+let config = { WORLD_WIDTH:4000, WORLD_HEIGHT:4000 };
+let players = {};
+let stars   = {};
+let localPlayer = null;
+let myTopScore = 0;
+let dead = false;
+
+let camX=0, camY=0, camTX=0, camTY=0;
+let mouseX=window.innerWidth/2, mouseY=window.innerHeight/2;
+let boost=false;
+let pingStart=0, ping=0;
+let particles=[];
+
+function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function connect() {
+  const proto = location.protocol==='https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
+  pingStart = Date.now();
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type:'setName', name: nameInput.value.trim()||'Asteroid' }));
+    // Also send equipped skin so server/other players could use it (future-proof)
+    ws.send(JSON.stringify({ type:'setSkin', skin: equippedSkin }));
+  };
+  ws.onmessage = e => handleMessage(JSON.parse(e.data));
+  // Do NOT auto-reconnect — player must explicitly respawn
+  ws.onclose = () => {};
+}
+
+function handleMessage(msg) {
+  switch(msg.type) {
+
+    case 'init': {
+      selfId = msg.selfId;
+      config = {...config, ...msg.config};
+      // Sync the mass→pixel formula with server
+      if (msg.config.RADIUS_BASE)     RADIUS_BASE     = msg.config.RADIUS_BASE;
+      if (msg.config.RADIUS_LOG_BASE) RADIUS_LOG_BASE = msg.config.RADIUS_LOG_BASE;
+      players = {};
+      msg.players.forEach(p => { players[p.id] = {...p, sx:p.x, sy:p.y}; });
+      stars = {};
+      msg.stars.forEach(s => { stars[s.id]=s; });
+      localPlayer = players[selfId];
+      myTopScore = msg.topScore || 0;
+      topScoreVal.textContent = myTopScore || '—';
+      dead = false;
+      if(localPlayer){ camX=localPlayer.x-canvas.width/2; camY=localPlayer.y-canvas.height/2; }
+      titleScreen.classList.add('hidden');
+      deathScreen.classList.add('hidden');
+      hudEl.classList.remove('hidden');
+      break;
+    }
+
+    case 'tick': {
+      ping = Date.now()-pingStart;
+      pingStart = Date.now();
+
+      // Build set of IDs from server
+      const incoming={};
+      msg.players.forEach(sp => { incoming[sp.id]=sp; });
+
+      // FIX: Remove any player not in the latest tick (includes dead/respawned ghosts)
+      for(const id of Object.keys(players)){
+        if(!incoming[id]) delete players[id];
+      }
+
+      for(const [id, sp] of Object.entries(incoming)){
+        if(id===selfId){
+          if(players[id]){
+            const lp=players[id];
+            const dx=sp.x-lp.x, dy=sp.y-lp.y;
+            const drift=Math.sqrt(dx*dx+dy*dy);
+            if(drift>80){ lp.x=sp.x; lp.y=sp.y; }
+            else if(drift>5){ lp.x+=dx*.12; lp.y+=dy*.12; }
+            lp.r=sp.r; lp.score=sp.score; lp.name=sp.name;
+          } else {
+            players[id]={...sp, sx:sp.x, sy:sp.y};
+          }
+        } else {
+          if(players[id]){
+            players[id].sx=sp.x; players[id].sy=sp.y;
+            players[id].r=sp.r;  players[id].score=sp.score;
+          } else {
+            players[id]={...sp, sx:sp.x, sy:sp.y};
+          }
+        }
+      }
+
+      stars={};
+      msg.stars.forEach(s => { stars[s.id]=s; });
+
+      if(msg.events){
+        msg.events.stars.forEach(ev => { if(ev.playerId===selfId) flashCollect(); });
+        msg.events.consumed.forEach(ev => {
+          const winner=players[ev.winnerId];
+          addKillFeed(winner, ev.loserName);
+
+          if(ev.loserId===selfId){
+            // FIX: Remove self from players map immediately so no ghost appears
+            delete players[selfId];
+            localPlayer = null;
+            handleDeath(winner);
+          } else {
+            const loser=players[ev.loserId];
+            if(loser) spawnBurst(loser.x, loser.y, loser.hue, 18);
+          }
+        });
+      }
+
+      if(msg.topScoreUpdates && msg.topScoreUpdates[selfId]){
+        myTopScore = msg.topScoreUpdates[selfId];
+        topScoreVal.textContent = myTopScore;
+        showNewRecord();
+      }
+
+      // Only update localPlayer ref if we're alive
+      if(!dead) localPlayer = players[selfId] || null;
+      playerCountEl.textContent=`PLAYERS ${Object.values(players).filter(p=>!p.isBot).length}`;
+      break;
+    }
+
+    case 'playerJoin': {
+      const p=msg.player;
+      // FIX: Don't add if it's us and we're dead (avoids duplicates during respawn handshake)
+      if(p.id===selfId && dead) break;
+      players[p.id]={...p, sx:p.x, sy:p.y};
+      break;
+    }
+    case 'playerLeave': {
+      delete players[msg.id];
+      break;
+    }
+    case 'playerUpdate': {
+      if(players[msg.player.id]) Object.assign(players[msg.player.id], msg.player);
+      break;
+    }
+  }
+}
+
+// ── Input ──────────────────────────────────────────────────────────────────
+canvas.addEventListener('mousemove', e=>{ mouseX=e.clientX; mouseY=e.clientY; });
+canvas.addEventListener('touchmove', e=>{
+  e.preventDefault();
+  mouseX=e.touches[0].clientX; mouseY=e.touches[0].clientY;
+},{passive:false});
+window.addEventListener('keydown', e=>{if(e.key==='w'||e.key==='W'||e.key==='ArrowUp')boost=true;});
+window.addEventListener('keyup',   e=>{if(e.key==='w'||e.key==='W'||e.key==='ArrowUp')boost=false;});
+
+function buildAndSendInput(){
+  // Don't send input if dead
+  if(!ws||ws.readyState!==WebSocket.OPEN||!localPlayer||dead) return null;
+  const cx=canvas.width/2, cy=canvas.height/2;
+  let dx=mouseX-cx, dy=mouseY-cy;
+  const len=Math.sqrt(dx*dx+dy*dy)||1;
+  if(len < massToPixelRadius(localPlayer.r)) return null;  // dead-zone = pixel radius
+  const bm=boost?1.5:1;
+  const nx=(dx/len)*bm, ny=(dy/len)*bm;
+  ws.send(JSON.stringify({type:'input',x:nx,y:ny}));
+  return {nx,ny};
+}
+
+// ── Visual effects ──────────────────────────────────────────────────────────
+function flashCollect(){
+  flashEl.style.opacity='1';
+  setTimeout(()=>{flashEl.style.opacity='0';},90);
+}
+function spawnBurst(x,y,hue,count){
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2, s=Math.random()*130+40;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:Math.random()*4+2,life:1,hue});
+  }
+}
+function updateParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx*dt; p.y+=p.vy*dt;
+    p.vx*=.91; p.vy*=.91;
+    p.life-=dt*1.7;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+// ── Death / Respawn ─────────────────────────────────────────────────────────
+function handleDeath(killer){
+  dead=true;
+  hudEl.classList.add('hidden');
+  const line2=myTopScore?`Your best mass: <span>${myTopScore}</span>`:'';
+  deathMsg.innerHTML=`Consumed by <span>${escHtml(killer?.name||'a larger asteroid')}</span>.<br/>${line2}`;
+  deathScreen.classList.remove('hidden');
+  // Close WS — server will clean up our player entry
+  if(ws){ ws.close(); ws=null; }
+}
+
+// Respawn = fresh connect
+respawnBtn.addEventListener('click',()=>{
+  dead=false;
+  players={};
+  localPlayer=null;
+  deathScreen.classList.add('hidden');
+  hudEl.classList.remove('hidden');
+  connect();
+});
+
+// Open shop from death screen
+deathShopBtn.addEventListener('click',()=>{
+  deathScreen.classList.add('hidden');
+  buildShop();
+  shopScreen.classList.remove('hidden');
+  // Store that we came from death so back goes to death screen
+  shopScreen.dataset.from='death';
+});
+
+// ── New record badge ────────────────────────────────────────────────────────
+let recordTimer=null;
+function showNewRecord(){
+  newRecordBadge.style.display='block';
+  newRecordBadge.style.animation='none';
+  void newRecordBadge.offsetWidth;
+  newRecordBadge.style.animation='';
+  clearTimeout(recordTimer);
+  recordTimer=setTimeout(()=>{newRecordBadge.style.display='none';},3000);
+}
+
+// ── Kill feed ───────────────────────────────────────────────────────────────
+function addKillFeed(winner,loserName){
+  if(!winner) return;
+  const el=document.createElement('div');
+  el.className='kf-entry';
+  el.innerHTML=`<span class="kf-winner">${escHtml(winner.name)}</span> ⊃ <span class="kf-loser">${escHtml(loserName||'?')}</span>`;
+  killfeed.prepend(el);
+  setTimeout(()=>el.remove(),3200);
+}
+function escHtml(s){
+  return String(s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+}
+
+// ── Leaderboard ─────────────────────────────────────────────────────────────
+function updateLeaderboard(){
+  // FIX: players map is always clean (dead players removed), so no dupes
+  const sorted=Object.values(players).sort((a,b)=>b.r-a.r).slice(0,8);
+  lbList.innerHTML='';
+  sorted.forEach((p,i)=>{
+    const li=document.createElement('li');
+    if(p.id===selfId) li.classList.add('me');
+    li.innerHTML=
+      `<span class="lb-rank">${i+1}</span>`+
+      `<span class="lb-name">${escHtml(p.name)}</span>`+
+      `<span class="lb-mass">${Math.round(p.r)}</span>`;
+    lbList.appendChild(li);
+  });
+}
+
+// ── Shop nav ────────────────────────────────────────────────────────────────
+shopBtn.addEventListener('click',()=>{
+  buildShop();
+  titleScreen.classList.add('hidden');
+  shopScreen.classList.remove('hidden');
+  shopScreen.dataset.from='title';
+});
+shopBackBtn.addEventListener('click',()=>{
+  shopScreen.classList.add('hidden');
+  closeAdModal();
+  if(shopScreen.dataset.from==='death'){
+    deathScreen.classList.remove('hidden');
+  } else {
+    titleScreen.classList.remove('hidden');
+  }
+});
+playBtn.addEventListener('click',()=>{
+  titleScreen.classList.add('hidden');
+  connect();
+});
+nameInput.addEventListener('keydown',e=>{if(e.key==='Enter') playBtn.click();});
+
+// ── Background starfield ─────────────────────────────────────────────────────
+const BGSTARS=Array.from({length:260},()=>({
+  x:Math.random(),y:Math.random(),
+  r:Math.random()*1.4+.3,b:Math.random()*.55+.2,tw:Math.random()*Math.PI*2,
+}));
+
+// ── Render loop ──────────────────────────────────────────────────────────────
+let lastFrame=performance.now();
+
+function render(now){
+  requestAnimationFrame(render);
+  const dt=Math.min((now-lastFrame)/1000,.05);
+  lastFrame=now;
+
+  // Client prediction for own player (only when alive)
+  const input=buildAndSendInput();
+  if(localPlayer&&input){
+    const pr=massToPixelRadius(localPlayer.r);
+    // Speed formula mirrors server: scale on pixel radius, not raw mass
+    const speed=Math.max(40,180-pr*2.2)*(boost?1.5:1);
+    const accel=Math.min(1,dt*10);
+    if(!localPlayer._vx){localPlayer._vx=0;localPlayer._vy=0;}
+    localPlayer._vx+=(input.nx*speed-localPlayer._vx)*accel;
+    localPlayer._vy+=(input.ny*speed-localPlayer._vy)*accel;
+    localPlayer.x+=localPlayer._vx*dt;
+    localPlayer.y+=localPlayer._vy*dt;
+    // Clamp with pixel radius so we don't drift outside world bounds
+    localPlayer.x=Math.max(pr,Math.min(config.WORLD_WIDTH-pr,localPlayer.x));
+    localPlayer.y=Math.max(pr,Math.min(config.WORLD_HEIGHT-pr,localPlayer.y));
+  }
+
+  // Interpolate remote players
+  for(const [id,p] of Object.entries(players)){
+    if(id===selfId) continue;
+    if(p.sx!==undefined){
+      p.x=p.x===undefined?p.sx:p.x+(p.sx-p.x)*Math.min(1,dt*14);
+      p.y=p.y===undefined?p.sy:p.y+(p.sy-p.y)*Math.min(1,dt*14);
+    }
+  }
+
+  // Camera
+  if(localPlayer){
+    camTX=localPlayer.x-canvas.width/2;
+    camTY=localPlayer.y-canvas.height/2;
+  }
+  camX+=(camTX-camX)*Math.min(1,dt*8);
+  camY+=(camTY-camY)*Math.min(1,dt*8);
+
+  updateParticles(dt);
+
+  // Clear
+  ctx.fillStyle='#030812';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Background stars
+  const t=now/1000;
+  for(const s of BGSTARS){
+    const px=((s.x*canvas.width-camX*.05)%canvas.width+canvas.width)%canvas.width;
+    const py=((s.y*canvas.height-camY*.05)%canvas.height+canvas.height)%canvas.height;
+    const tw=Math.sin(t*1.5+s.tw)*.3+.7;
+    ctx.beginPath(); ctx.arc(px,py,s.r*tw,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,255,255,${s.b*tw})`; ctx.fill();
+  }
+
+  ctx.save();
+  ctx.translate(-camX,-camY);
+
+  // World border
+  ctx.strokeStyle='rgba(0,255,224,.12)'; ctx.lineWidth=3;
+  ctx.setLineDash([20,20]); ctx.strokeRect(0,0,config.WORLD_WIDTH,config.WORLD_HEIGHT); ctx.setLineDash([]);
+
+  // Grid
+  ctx.strokeStyle='rgba(0,255,224,.04)'; ctx.lineWidth=1;
+  for(let gx=0;gx<=config.WORLD_WIDTH;gx+=200){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,config.WORLD_HEIGHT);ctx.stroke();}
+  for(let gy=0;gy<=config.WORLD_HEIGHT;gy+=200){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(config.WORLD_WIDTH,gy);ctx.stroke();}
+
+  // Stars (collectibles)
+  for(const star of Object.values(stars)){
+    const pulse=Math.sin(t*2+star.x*.01)*.3+.7;
+    const h=star.hue;
+    const glow=ctx.createRadialGradient(star.x,star.y,0,star.x,star.y,star.r*4);
+    glow.addColorStop(0,`hsla(${h},100%,80%,${.9*pulse})`);
+    glow.addColorStop(.4,`hsla(${h},100%,65%,${.4*pulse})`);
+    glow.addColorStop(1,`hsla(${h},100%,50%,0)`);
+    ctx.beginPath();ctx.arc(star.x,star.y,star.r*4,0,Math.PI*2);ctx.fillStyle=glow;ctx.fill();
+    ctx.beginPath();ctx.arc(star.x,star.y,star.r,0,Math.PI*2);ctx.fillStyle=`hsl(${h},100%,88%)`;ctx.fill();
+  }
+
+  // Particles
+  for(const p of particles){
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r*p.life,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${p.hue},100%,70%,${p.life*.8})`;ctx.fill();
+  }
+
+  // Players
+  for(const [id,p] of Object.entries(players)){
+    drawPlayer(ctx, p, id===selfId, t);
+  }
+
+  ctx.restore();
+
+  // Crosshair
+  if(!dead&&localPlayer){
+    const cx2=canvas.width/2,cy2=canvas.height/2;
+    ctx.strokeStyle='rgba(0,255,224,.4)'; ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(mouseX-10,mouseY);ctx.lineTo(mouseX+10,mouseY);
+    ctx.moveTo(mouseX,mouseY-10);ctx.lineTo(mouseX,mouseY+10);
+    ctx.stroke();
+    const ddx=mouseX-cx2,ddy=mouseY-cy2;
+    if(Math.sqrt(ddx*ddx+ddy*ddy)>massToPixelRadius(localPlayer.r)){
+      ctx.setLineDash([4,6]);ctx.strokeStyle='rgba(0,255,224,.1)';
+      ctx.beginPath();ctx.moveTo(cx2,cy2);ctx.lineTo(mouseX,mouseY);ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // HUD
+  if(localPlayer&&!dead){
+    massVal.textContent=Math.round(localPlayer.r);
+    updateLeaderboard();
+    drawMinimap();
+  }
+  pingDisplay.textContent=`PING ${ping>999?'???':ping} ms`;
+}
+
+// ── Asteroid drawing ──────────────────────────────────────────────────────────
+// p.r is RAW MASS. We convert to pixel radius here for all visual sizing.
+function drawPlayer(c, p, isSelf, t){
+  if(p.x===undefined||p.y===undefined) return;
+  const {x,y,hue,name}=p;
+  const pr = massToPixelRadius(p.r);  // pixel radius for this player
+  const skin = isSelf ? getActiveSkin() : { type:'solid', hue: null };
+  const drawHue = skin.hue !== null ? skin.hue : hue;
+  drawAsteroidShape(c, x, y, pr, p.id, skin, t, isSelf, 1, hue);
+
+  // Self ring (animated pulse)
+  if(isSelf){
+    c.beginPath();
+    c.arc(x,y,pr+3+Math.sin(t*3)*1.5,0,Math.PI*2);
+    c.strokeStyle=`hsla(${drawHue},100%,70%,.55)`;
+    c.lineWidth=2; c.stroke();
+  }
+
+  // Name label — positioned below the asteroid using pixel radius
+  const fs=Math.max(10,Math.min(14,pr*.55));
+  c.font=`700 ${fs}px Orbitron,monospace`;
+  c.textAlign='center'; c.textBaseline='middle';
+  c.fillStyle='rgba(255,255,255,.92)';
+  c.fillText(name||'?', x, y+pr+fs+2);
+  if(p.isBot){
+    c.font=`${fs-2}px Share Tech Mono,monospace`;
+    c.fillStyle='rgba(255,255,255,.28)';
+    c.fillText('BOT',x,y+pr+fs*2+4);
+  }
+
+  // Mass counter in the center of the asteroid (what the user added)
+  const massFs = Math.max(8, Math.min(18, pr * 0.45));
+  c.font = `700 ${massFs}px Orbitron,monospace`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  // Shadow for readability on any skin color
+  c.shadowColor = 'rgba(0,0,0,0.7)';
+  c.shadowBlur = 4;
+  c.fillStyle = 'rgba(255,255,255,0.95)';
+  c.fillText(Math.round(p.r), x, y);
+  c.shadowBlur = 0;
+}
+
+// Core asteroid shape renderer.
+// pr = pixel radius (already converted from mass by caller)
+// pid = player id string (used for deterministic crater seed — never changes)
+function drawAsteroidShape(c, x, y, pr, pid, skin, t, isSelf, alpha, fallbackHue){
+  const h = skin.hue;
+  const glowR=pr*(isSelf?3.5:2.5);
+  const glow=c.createRadialGradient(x,y,pr*.4,x,y,glowR);
+
+  switch(skin.type){
+    case 'lava': {
+      glow.addColorStop(0,`hsla(${h},100%,55%,${(isSelf?.38:.2)*alpha})`);
+      glow.addColorStop(1,`hsla(${h},100%,40%,0)`);
+      c.beginPath();c.arc(x,y,glowR,0,Math.PI*2);c.fillStyle=glow;c.fill();
+      const bg=c.createRadialGradient(x,y,0,x,y,pr);
+      bg.addColorStop(0,`hsl(50,100%,65%)`);
+      bg.addColorStop(.4,`hsl(${h},100%,50%)`);
+      bg.addColorStop(1,`hsl(${h},80%,20%)`);
+      c.beginPath();c.arc(x,y,pr,0,Math.PI*2);c.fillStyle=bg;c.fill();
+      for(let i=0;i<4;i++){
+        const ang=(t*.8+i*1.57)%(Math.PI*2);
+        c.beginPath();c.moveTo(x,y);
+        c.lineTo(x+Math.cos(ang)*pr*.8,y+Math.sin(ang)*pr*.8);
+        c.strokeStyle=`hsla(50,100%,70%,${.4+Math.sin(t*3+i)*.2})`;
+        c.lineWidth=1.5;c.stroke();
+      }
+      break;
+    }
+    case 'ice': {
+      glow.addColorStop(0,`hsla(${h},80%,80%,${(isSelf?.35:.18)*alpha})`);
+      glow.addColorStop(1,`hsla(${h},80%,60%,0)`);
+      c.beginPath();c.arc(x,y,glowR,0,Math.PI*2);c.fillStyle=glow;c.fill();
+      const bg=c.createRadialGradient(x-pr*.3,y-pr*.3,0,x,y,pr);
+      bg.addColorStop(0,`hsl(${h},60%,88%)`);
+      bg.addColorStop(.5,`hsl(${h},70%,62%)`);
+      bg.addColorStop(1,`hsl(${h},60%,35%)`);
+      c.beginPath();c.arc(x,y,pr,0,Math.PI*2);c.fillStyle=bg;c.fill();
+      const seed2=(h||0)*7;
+      for(let i=0;i<5;i++){
+        const a=(seed2+i*1.26)%(Math.PI*2);
+        c.beginPath();c.moveTo(x+Math.cos(a)*pr*.2,y+Math.sin(a)*pr*.2);
+        c.lineTo(x+Math.cos(a)*pr*.9,y+Math.sin(a)*pr*.9);
+        c.strokeStyle=`rgba(255,255,255,.25)`;c.lineWidth=1;c.stroke();
+      }
+      break;
+    }
+    case 'neon': {
+      const pulse=Math.sin(t*4)*.3+.7;
+      glow.addColorStop(0,`hsla(${h},100%,65%,${(isSelf?.55:.3)*alpha*pulse})`);
+      glow.addColorStop(1,`hsla(${h},100%,50%,0)`);
+      c.beginPath();c.arc(x,y,glowR,0,Math.PI*2);c.fillStyle=glow;c.fill();
+      const bg=c.createRadialGradient(x,y,0,x,y,pr);
+      bg.addColorStop(0,`hsl(${h},100%,75%)`);
+      bg.addColorStop(.6,`hsl(${h},100%,45%)`);
+      bg.addColorStop(1,`hsl(${h},80%,20%)`);
+      c.beginPath();c.arc(x,y,pr,0,Math.PI*2);c.fillStyle=bg;c.fill();
+      c.beginPath();c.arc(x,y,pr*.75,0,Math.PI*2);
+      c.strokeStyle=`hsla(${h},100%,80%,${.5*pulse})`;c.lineWidth=2;c.stroke();
+      break;
+    }
+    case 'gold': {
+      glow.addColorStop(0,`hsla(${h},100%,60%,${(isSelf?.4:.2)*alpha})`);
+      glow.addColorStop(1,`hsla(${h},100%,40%,0)`);
+      c.beginPath();c.arc(x,y,glowR,0,Math.PI*2);c.fillStyle=glow;c.fill();
+      const bg=c.createRadialGradient(x-pr*.35,y-pr*.35,0,x,y,pr);
+      bg.addColorStop(0,`hsl(${h},100%,75%)`);
+      bg.addColorStop(.5,`hsl(${h},90%,52%)`);
+      bg.addColorStop(1,`hsl(${h},70%,25%)`);
+      c.beginPath();c.arc(x,y,pr,0,Math.PI*2);c.fillStyle=bg;c.fill();
+      c.beginPath();c.arc(x-pr*.2,y-pr*.2,pr*.4,Math.PI*1.2,Math.PI*1.8);
+      c.strokeStyle='rgba(255,255,200,.5)';c.lineWidth=2;c.stroke();
+      break;
+    }
+    case 'nebula': {
+      glow.addColorStop(0,`hsla(${h},80%,55%,${(isSelf?.4:.2)*alpha})`);
+      glow.addColorStop(.5,`hsla(${h+40},80%,45%,.1)`);
+      glow.addColorStop(1,`hsla(${h},80%,40%,0)`);
+      c.beginPath();c.arc(x,y,glowR,0,Math.PI*2);c.fillStyle=glow;c.fill();
+      const bg=c.createRadialGradient(x,y,0,x,y,pr);
+      bg.addColorStop(0,`hsl(${h+60},70%,65%)`);
+      bg.addColorStop(.5,`hsl(${h},60%,40%)`);
+      bg.addColorStop(1,`hsl(${h+120},50%,15%)`);
+      c.beginPath();c.arc(x,y,pr,0,Math.PI*2);c.fillStyle=bg;c.fill();
+      break;
+    }
+    case 'void': {
+      glow.addColorStop(0,`hsla(${h},60%,30%,${(isSelf?.3:.15)*alpha})`);
+      glow.addColorStop(1,`hsla(${h},60%,20%,0)`);
+      c.beginPath();c.arc(x,y,glowR,0,Math.PI*2);c.fillStyle=glow;c.fill();
+      const bg=c.createRadialGradient(x,y,0,x,y,pr);
+      bg.addColorStop(0,`hsl(${h},40%,25%)`);
+      bg.addColorStop(.7,`hsl(${h},60%,8%)`);
+      bg.addColorStop(1,'#000');
+      c.beginPath();c.arc(x,y,pr,0,Math.PI*2);c.fillStyle=bg;c.fill();
+      const sv=h*13;
+      for(let i=0;i<5;i++){
+        const sa=(sv+i*2.51)%(Math.PI*2);
+        const sd=pr*(.2+((sv+i*7)%5)*.12);
+        c.beginPath();c.arc(x+Math.cos(sa)*sd,y+Math.sin(sa)*sd,1,0,Math.PI*2);
+        c.fillStyle=`rgba(180,180,255,.7)`;c.fill();
+      }
+      break;
+    }
+    case 'toxic': {
+      const tpulse=Math.sin(t*2.5)*.2+.8;
+      glow.addColorStop(0,`hsla(${h},100%,45%,${(isSelf?.4:.22)*alpha*tpulse})`);
+      glow.addColorStop(1,`hsla(${h},100%,35%,0)`);
+      c.beginPath();c.arc(x,y,glowR,0,Math.PI*2);c.fillStyle=glow;c.fill();
+      const bg=c.createRadialGradient(x,y,0,x,y,pr);
+      bg.addColorStop(0,`hsl(${h},100%,60%)`);
+      bg.addColorStop(.5,`hsl(${h},80%,38%)`);
+      bg.addColorStop(1,`hsl(${h},60%,15%)`);
+      c.beginPath();c.arc(x,y,pr,0,Math.PI*2);c.fillStyle=bg;c.fill();
+      const tseed=h*11;
+      for(let i=0;i<4;i++){
+        const ta=(tseed+i*1.57+t*.5)%(Math.PI*2);
+        c.beginPath();c.arc(x+Math.cos(ta)*pr*.5,y+Math.sin(ta)*pr*.5,pr*.1,0,Math.PI*2);
+        c.fillStyle=`hsla(${h},100%,75%,.6)`;c.fill();
+      }
+      break;
+    }
+    default: { // solid
+      const useHue=h!==null?h:(fallbackHue||180);
+      glow.addColorStop(0,`hsla(${useHue},90%,65%,${(isSelf?.35:.18)*alpha})`);
+      glow.addColorStop(1,`hsla(${useHue},90%,50%,0)`);
+      c.beginPath();c.arc(x,y,glowR,0,Math.PI*2);c.fillStyle=glow;c.fill();
+      const bg=c.createRadialGradient(x-pr*.3,y-pr*.3,0,x,y,pr);
+      bg.addColorStop(0,`hsl(${useHue},62%,62%)`);
+      bg.addColorStop(.6,`hsl(${useHue},50%,36%)`);
+      bg.addColorStop(1,`hsl(${useHue},40%,18%)`);
+      c.beginPath();c.arc(x,y,pr,0,Math.PI*2);c.fillStyle=bg;c.fill();
+      // FIX: Craters seeded from player ID only — never from x/y position so they don't spin
+      const idHash=pid?[...String(pid)].reduce((a,ch)=>((a*31+ch.charCodeAt(0))&0xffff),7):42;
+      for(let i=0;i<3;i++){
+        const ca=(idHash*0.0013+i*2.1)%(Math.PI*2);
+        const cr=pr*(.12+((idHash+i*17)%7)*.03);
+        c.beginPath();c.arc(x+Math.cos(ca)*pr*.45,y+Math.sin(ca)*pr*.45,cr,0,Math.PI*2);
+        c.fillStyle=`hsla(${useHue},30%,18%,.6)`;c.fill();
+      }
+    }
+  }
+
+  // Shared rim highlight (all skins)
+  c.beginPath();c.arc(x,y,pr,0,Math.PI*2);
+  c.strokeStyle=`hsla(${h!==null?h:(fallbackHue||180)},80%,70%,.4)`;c.lineWidth=1.5;c.stroke();
+}
+
+// ── Minimap ──────────────────────────────────────────────────────────────────
+function drawMinimap(){
+  const W=mmCanvas.width,H=mmCanvas.height;
+  const sx=W/config.WORLD_WIDTH,sy=H/config.WORLD_HEIGHT;
+  mmCtx.fillStyle='rgba(3,8,18,.92)';mmCtx.fillRect(0,0,W,H);
+  for(const s of Object.values(stars)){
+    mmCtx.beginPath();mmCtx.arc(s.x*sx,s.y*sy,1,0,Math.PI*2);
+    mmCtx.fillStyle=`hsl(${s.hue},100%,70%)`;mmCtx.fill();
+  }
+  for(const p of Object.values(players)){
+    const isSelf=p.id===selfId;
+    // Use pixel radius for minimap dot so large players don't swamp it
+    const dotR=Math.max(2,Math.min(6,massToPixelRadius(p.r)*sx*8));
+    mmCtx.beginPath();mmCtx.arc(p.x*sx,p.y*sy,dotR,0,Math.PI*2);
+    mmCtx.fillStyle=isSelf?`hsl(${p.hue},100%,65%)`:`hsla(${p.hue},80%,55%,.65)`;
+    mmCtx.fill();
+  }
+  mmCtx.strokeStyle='rgba(0,255,224,.38)';mmCtx.lineWidth=1;
+  mmCtx.strokeRect(camX*sx,camY*sy,canvas.width*sx,canvas.height*sy);
+}
+
+// Kick off
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
